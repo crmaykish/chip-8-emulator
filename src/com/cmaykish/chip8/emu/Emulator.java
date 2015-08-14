@@ -7,217 +7,260 @@ import java.util.Scanner;
 import java.util.Stack;
 
 public class Emulator {
+    private static final int[] FONT = {
+            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    };
+
+    private static final String ROM_PATH = "C:/chip8/";
+    private static final String ROM_NAME = "INVADERS";
+
     private boolean RUNNING = true;
 
-    // registers
-    int[] v = new int[16];
-    int index = 0;
-    int counter = 512;
+    // Registers
+    private int[] V = new int[16];  // 16 8-bit V registers
+    private int I = 0;          // One 16-bit Index register
+    private int PC = 512;           // One 8-bit Program Counter
 
-    // memory
-    int[] memory = new int[4096]; // 4k
+    // Memory
+    private int[] M = new int[4096];   // CHIP-8 has 4Kb of RAM
 
-    // stack
-    Stack<Integer> stack = new Stack<Integer>();
+    // Timer registers
+    private int sound = 0;
+    private int delay = 0;
 
-    // current opcode
-    int opcode = 0;
+    // Stack
+    private Stack<Integer> stack = new Stack<>();
 
-    // timers
-    int sound = 0;
-    int delay = 0;
+    // Current Opcode
+    int op = 0;
 
-    // display
-    // boolean[][] display = new boolean[64][32];
+    // Display
+    private Display display;
 
-    public void start() {
+    public Emulator(Display display) {
+        // Instantiate local display object
+        this.display = display;
+
+        // Load font sprites into memory
+        for (int i = 0; i < FONT.length; i++) {
+            M[i] = FONT[i];
+        }
+
+        // Load ROM into memory from local file
+        try {
+            byte[] rom = Files.readAllBytes(Paths.get(ROM_PATH + ROM_NAME));
+            for (int i = 0; i < rom.length; i++) {
+                M[i + 512] = rom[i];
+            }
+        } catch (IOException e) {
+            System.err.println("Invalid rom path.");
+            System.exit(0);
+        }
+
+    }
+
+    public void emulate() {
         System.err.println("Starting emulation...");
 
-        init();
-
         while (RUNNING) {
-
-            //debugging
-
-            System.err.print("counter: " + counter + " | ");
-            System.err.print("I:");
-            writeHexValue(index);
-
-            for (int i = 0; i < v.length; i++) {
-                System.err.print("v" + i + ": " + Integer.toHexString(v[i]) + " | ");
+            // Debugging output
+            System.err.print("PC: " + PC + " | ");
+            System.err.print("I: " + hex(I));
+            for (int i = 0; i < V.length; i++) {
+                System.err.print("V" + i + ": " + Integer.toHexString(V[i]) + " | ");
             }
 
-            new Scanner(System.in).nextLine();    // step
+            // Wait for user input to continue to next step
+            new Scanner(System.in).nextLine();
 
-            readOpcode();
-            executeOpcode();
-
-
+            cycle();
         }
 
         System.err.println("Stopped emulation.");
     }
 
-    private void init() {
-        // load font sprites
-        initHexSprites();
-
-        // load rom into memory
-        try {
-            byte[] rom = Files.readAllBytes(Paths.get("C:/chip8/INVADERS"));
-
-            for (int i = 0; i < rom.length; i++) {
-                memory[i + 512] = rom[i];
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+    // Read and execute one opcode
+    private void cycle(){
+        readOpcode();
+        executeOpcode();
+        draw();
     }
 
+
+
+    // Read the Opcode located at the place in memory indicated by the program counter
     private void readOpcode() {
-        int a = memory[counter] & 0x000000FF;
-        int b = memory[counter + 1] & 0x000000FF;
-
-        opcode = ((a << 8) | b);
-
-        System.err.println("Opcode: " + Integer.toHexString(opcode).toUpperCase());
+        int a = M[PC] & 0x000000FF;
+        int b = M[PC + 1] & 0x000000FF;
+        op = ((a << 8) | b);
     }
 
+    // Execute the current opcode logic
     private void executeOpcode() {
+        // Flag to indicate whether program counter should be incremented after opcode or not
+        // Default to yes, opcode handlers need to specify if there should be no increment
         boolean inc = true;
 
-        switch (getTop4Bits(opcode)) {
+        switch (tNibble(op)) {
             case 0x0:
-                switch (getBottomByte(opcode)) {
+                switch (bByte(op)) {
                     case 0xE0:  // 00E0: Clear the screen
-
+                        display.clearScreen();
                         break;
                     case 0xEE:  // 00EE: Return from a subroutine
-
+                        PC = stack.pop();
+                        inc = false;
                         break;
                 }
                 break;
 
             case 0x1:    // 1NNN: Jump to NNN
-                counter = opcode & 0x0FFF;
+                PC = op & 0x0FFF;
+                inc = false;
                 break;
 
             case 0x2:    // 2NNN: Push current counter to stack, jump to NNN
-                stack.push(counter);
-                counter = opcode & 0x0FFF;
+                stack.push(PC);
+                PC = op & 0x0FFF;
+                inc = false;
                 break;
 
             case 0x3:    // 3XNN: Skip next instruction if VX equals NN
-                if (v[getSecond4Bits(opcode)] == getBottomByte(opcode)) {
-                    counter += 2;
+                if (V[opX(op)] == bByte(op)) {
+                    PC += 2;
                 }
                 break;
 
             case 0x4:   // 4XNN: Skip next instruction if VX is not equal to NN
-                if (v[getSecond4Bits(opcode)] != getBottomByte(opcode)) {
-                    counter += 2;
+                if (V[opX(op)] != bByte(op)) {
+                    PC += 2;
                 }
                 break;
 
             case 0x5:   // 5XY0: Skip the next instruction if VX equals VY
-                if (v[getSecond4Bits(opcode)] == (getBottomByte(opcode) & 0xF0 >> 4)) {
-                    counter += 2;   // TODO: test this!
+                if (V[opX(op)] == opY(op)) {
+                    PC += 2;
                 }
                 break;
 
             case 0x6:    // 6XNN: Set VX to NN
-                v[getSecond4Bits(opcode)] = getBottomByte(opcode);
+                V[opX(op)] = bByte(op);
                 break;
 
             case 0x7:    // 7XNN: Add NN to VX
-                v[getSecond4Bits(opcode)] += getBottomByte(opcode);
+                V[opX(op)] += bByte(op);
                 break;
 
             case 0x8:
-                switch (getThird4Bits(opcode)) {
+                switch (opY(op)) {
                     case 0x0:   // 8XY0: Set VX to value of VY
-                        v[getSecond4Bits(opcode)] = v[getThird4Bits(opcode)];
+                        V[opX(op)] = V[opY(op)];
                         break;
-                    case 0x1:   // 8XY1: Set VX to VX or VY
-                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] | v[getThird4Bits(opcode)];
+                    case 0x1:   // 8XY1: Set VX to VX OR VY
+                        V[opX(op)] = V[opX(op)] | V[opY(op)];
                         break;
-                    case 0x2:   // 8XY2: Sets VX to VX and VY
-                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] & v[getThird4Bits(opcode)];
+                    case 0x2:   // 8XY2: Sets VX to VX AND VY
+                        V[opX(op)] = V[opX(op)] & V[opY(op)];
                         break;
-                    case 0x3:   // 8XY3: Sets VX to VX xor VY
-                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] ^ v[getThird4Bits(opcode)];
+                    case 0x3:   // 8XY3: Sets VX to VX XOR VY
+                        V[opX(op)] = V[opX(op)] ^ V[opY(op)];
                         break;
                     case 0x4:   // 8XY4: Add VY to VX. Set VF to 1 if there's a carry, 0 when there's not
-
+                        // TODO
                         break;
                     case 0x5:   // 8XY5: Subtract VY from VX. Set VF to 0 if there's a borrow, 1 when there's not
+                        // TODO
                         break;
                     case 0x6:   // 8XY6: Shift VX right by 1. VF is set to least significant bit before shift
+                        // TODO
                         break;
                     case 0x7:   // 8XY7: Set VX to VY - VX. VF is set to 0 when there's a borrow, 1 when there's not
+                        // TODO
                         break;
                     case 0xE:   // 8XYE: Shifts VX left by 1. VF is set to the most significant bit before shift.
+                        // TODO
                         break;
                 }
                 break;
 
             case 0x9:   // 9XY0: Skip the next instruction if VX doesn't equal VY
+                if (V[opX(op)] != opY(op)) {
+                    PC += 2;
+                }
                 break;
 
             case 0xA:    // ANNN: Set I to NNN
-                index = opcode & 0x0FFF;
-                writeHexValue(index);
+                I = op & 0x0FFF;
                 break;
 
             case 0xB:   // BNNN: Jump to NNN plus V0
+                // TODO
                 break;
 
             case 0xC:   // CXNN: Set VX to bitwise AND operation on a random number and NN.
+                // TODO
                 break;
 
             case 0xD:    // DXYN: Draw...
+                // TODO
                 break;
 
             case 0xE:
-                switch (getBottomByte(opcode)) {
+                switch (bByte(op)) {
                     case 0x9E:  // EX9E: Skip the next instruction if the key stored in VX is pressed.
+                        // TODO
                         break;
                     case 0xA1:  // EXA1: Skips the next instruction if the key stored in VX isn't pressed.
+                        // TODO
                         break;
                 }
                 break;
 
             case 0xF:
-                switch (getBottomByte(opcode)) {
+                switch (bByte(op)) {
                     case 0x07:    // FX07: Set VX to value of delay timer.
-
+                        V[opX(op)] = delay;
                         break;
                     case 0x0A:    // FX0A: Wait for key press, store key value in VX.
-                        int x = getSecond4Bits(opcode);
-                        v[x] = 1; // TODO: dummy value... get keyboard input
+                        // TODO
                         break;
                     case 0x15:  // FX15: Sets the delay timer to VX
+                        delay = V[opX(op)];
                         break;
                     case 0x18:  // FX18: Sets the sound timer to VX
+                        sound = V[opX(op)];
                         break;
                     case 0x1E:  // FX1E: Add VX to I
-                        index += v[getSecond4Bits(opcode)];
+                        I += V[opX(op)];
                         break;
-                    case 0x29:
-                        writeHexValue(v[getSecond4Bits(opcode)]);
+                    case 0x29:  // FX29: Set I to the location of the sprite for the character in VX
+                        // TODO
                     case 0x33:    // Store binary-coded decimal of VX at I, I+1, I+2
-                        memory[index] = v[(opcode & 0x0F00 >> 8)] / 100;
-                        memory[index + 1] = (v[(opcode & 0x0F00 >> 8)] / 100) % 10;
-                        memory[index + 2] = (v[(opcode & 0x0F00) >> 8] % 100) % 10;
+                        M[I] = V[(op & 0x0F00 >> 8)] / 100;
+                        M[I + 1] = (V[(op & 0x0F00 >> 8)] / 100) % 10;
+                        M[I + 2] = (V[(op & 0x0F00) >> 8] % 100) % 10;
                     case 0x55:    // FX55: Store V0 to VX in memory starting at I
-                        for (int n = 0; n < getSecond4Bits(opcode); n++) { // TODO: < or <=?
-                            memory[index + n] = v[n];
+                        for (int n = 0; n < opX(op); n++) { // TODO: < or <=?
+                            M[I + n] = V[n];
                         }
-                    case 0x65:    // FX65: Fill V0 to VX with memory values starting at address I (index)
-                        for (int n = 0; n < getSecond4Bits(opcode); n++) { // TODO: < or <=?
-                            v[n] = memory[index + n];    // TODO: ??
+                    case 0x65:    // FX65: Fill V0 to VX with memory values starting at address I (I)
+                        for (int n = 0; n < opX(op); n++) { // TODO: < or <=?
+                            V[n] = M[I + n];
                         }
                     default:
                         break;
@@ -231,54 +274,38 @@ public class Emulator {
         }
 
         if (inc) {
-            counter += 2;
+            PC += 2;
         }
     }
 
-    private int getTop4Bits(int o) {
+    // Draw the screen
+    private void draw() {
+        // TODO
+    }
+
+    // Return the top nibble (most significant 4 bits) of a 2-byte number
+    private int tNibble(int o) {
         return (o & 0xF000) >> 12;
     }
 
-    private int getSecond4Bits(int o) {
+    // Return the second nibble (corresponding to X in many Opcodes) of a 2-byte number
+    private int opX(int o) {
         return (o & 0x0F00) >> 8;
     }
 
-    private int getThird4Bits(int o){
+    // Return the third nibble (corresponding to Y in many Opcodes) of a 2-byte number
+    private int opY(int o){
         return (o & 0x00F0) >> 4;
     }
 
-    private int getBottomByte(int o) {
+    // Return the least significant byte of a 2-byte number
+    private int bByte(int o) {
         return (o & 0x00FF);
     }
 
-    private void writeHexValue(int o) {
-        System.err.println(Integer.toHexString(o).toUpperCase());
-    }
-
-    private void initHexSprites() {
-        int[] font = {
-                0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-                0x20, 0x60, 0x20, 0x20, 0x70, // 1
-                0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-                0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-                0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-                0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-                0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-                0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-                0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-                0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-                0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-                0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-                0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-                0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-                0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-                0xF0, 0x80, 0xF0, 0x80, 0x80 // F
-        };
-
-        for (int i = 0; i < font.length; i++) {
-            memory[i] = font[i];
-        }
-
+    // Convert an integer to a Hexadecimal display string
+    private String hex(int o) {
+        return Integer.toHexString(o).toUpperCase();
     }
 
 }
