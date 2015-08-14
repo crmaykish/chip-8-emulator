@@ -3,6 +3,7 @@ package com.cmaykish.chip8.emu;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.Stack;
 
@@ -101,8 +102,6 @@ public class Emulator {
         draw();
     }
 
-
-
     // Read the Opcode located at the place in memory indicated by the program counter
     private void readOpcode() {
         int a = M[PC] & 0x000000FF;
@@ -181,19 +180,31 @@ public class Emulator {
                         V[opX(op)] = V[opX(op)] ^ V[opY(op)];
                         break;
                     case 0x4:   // 8XY4: Add VY to VX. Set VF to 1 if there's a carry, 0 when there's not
-                        // TODO
+                        int temp = V[opX(op)] + V[opY(op)];
+                        V[opX(op)] = temp & 0xFFFF;
+                        if (temp > 0xFFFF){
+                            V[0xF] = 0x1;
+                        }
                         break;
                     case 0x5:   // 8XY5: Subtract VY from VX. Set VF to 0 if there's a borrow, 1 when there's not
-                        // TODO
+                        V[opX(op)] -= V[opY(op)];
+                        if (V[opX(op)] > V[opY(op)]){
+                            V[0xF] = 0x1;
+                        }
                         break;
                     case 0x6:   // 8XY6: Shift VX right by 1. VF is set to least significant bit before shift
-                        // TODO
+                        V[0xF] = V[opX(op)] & 0x01;
+                        V[opX(op)] = V[opX(op)] >> 1;
                         break;
                     case 0x7:   // 8XY7: Set VX to VY - VX. VF is set to 0 when there's a borrow, 1 when there's not
-                        // TODO
+                        V[opX(op)] = V[opY(op)] - V[opX(op)];
+                        if (V[opY(op)] > V[opX(op)]){
+                            V[0xF] = 0x1;
+                        }
                         break;
                     case 0xE:   // 8XYE: Shifts VX left by 1. VF is set to the most significant bit before shift.
-                        // TODO
+                        V[0xF] = V[opX(op)] & 0x80;
+                        V[opX(op)] = V[opX(op)] << 1;
                         break;
                 }
                 break;
@@ -209,11 +220,12 @@ public class Emulator {
                 break;
 
             case 0xB:   // BNNN: Jump to NNN plus V0
-                // TODO
+                PC = (op & 0x0FFF) + V[0];
+                inc = false;
                 break;
 
             case 0xC:   // CXNN: Set VX to bitwise AND operation on a random number and NN.
-                // TODO
+                V[opX(op)] = bByte(op) & new Random().nextInt(0xFF);
                 break;
 
             case 0xD:    // DXYN: Draw...
