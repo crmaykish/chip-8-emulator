@@ -23,6 +23,10 @@ public class Emulator {
     // current opcode
     int opcode = 0;
 
+    // timers
+    int sound = 0;
+    int delay = 0;
+
     // display
     // boolean[][] display = new boolean[64][32];
 
@@ -34,6 +38,11 @@ public class Emulator {
         while (RUNNING) {
 
             //debugging
+
+            System.err.print("counter: " + counter + " | ");
+            System.err.print("I:");
+            writeHexValue(index);
+
             for (int i = 0; i < v.length; i++) {
                 System.err.print("v" + i + ": " + Integer.toHexString(v[i]) + " | ");
             }
@@ -81,7 +90,7 @@ public class Emulator {
 
         switch (getTop4Bits(opcode)) {
             case 0x0:
-                switch (getBottomByte(opcode)){
+                switch (getBottomByte(opcode)) {
                     case 0xE0:  // 00E0: Clear the screen
 
                         break;
@@ -127,16 +136,21 @@ public class Emulator {
                 break;
 
             case 0x8:
-                switch (getBottomByte(opcode) & 0x0F >> 4){
+                switch (getThird4Bits(opcode)) {
                     case 0x0:   // 8XY0: Set VX to value of VY
+                        v[getSecond4Bits(opcode)] = v[getThird4Bits(opcode)];
                         break;
                     case 0x1:   // 8XY1: Set VX to VX or VY
+                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] | v[getThird4Bits(opcode)];
                         break;
                     case 0x2:   // 8XY2: Sets VX to VX and VY
+                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] & v[getThird4Bits(opcode)];
                         break;
                     case 0x3:   // 8XY3: Sets VX to VX xor VY
+                        v[getSecond4Bits(opcode)] = v[getSecond4Bits(opcode)] ^ v[getThird4Bits(opcode)];
                         break;
                     case 0x4:   // 8XY4: Add VY to VX. Set VF to 1 if there's a carry, 0 when there's not
+
                         break;
                     case 0x5:   // 8XY5: Subtract VY from VX. Set VF to 0 if there's a borrow, 1 when there's not
                         break;
@@ -167,7 +181,7 @@ public class Emulator {
                 break;
 
             case 0xE:
-                switch(getBottomByte(opcode)){
+                switch (getBottomByte(opcode)) {
                     case 0x9E:  // EX9E: Skip the next instruction if the key stored in VX is pressed.
                         break;
                     case 0xA1:  // EXA1: Skips the next instruction if the key stored in VX isn't pressed.
@@ -189,6 +203,7 @@ public class Emulator {
                     case 0x18:  // FX18: Sets the sound timer to VX
                         break;
                     case 0x1E:  // FX1E: Add VX to I
+                        index += v[getSecond4Bits(opcode)];
                         break;
                     case 0x29:
                         writeHexValue(v[getSecond4Bits(opcode)]);
@@ -228,8 +243,8 @@ public class Emulator {
         return (o & 0x0F00) >> 8;
     }
 
-    private int getTopByte(int o) {
-        return (o & 0xFF00) >> 8;
+    private int getThird4Bits(int o){
+        return (o & 0x00F0) >> 4;
     }
 
     private int getBottomByte(int o) {
