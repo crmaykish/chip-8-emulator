@@ -3,7 +3,7 @@ package com.cmaykish.chip8.emu;
 import java.awt.*;
 
 public class Display extends Frame{
-    private boolean[][] pixels = new boolean[64][32];
+    public int[][] pixels = new int[64][64];
     private Canvas c;
 
     public Display(){
@@ -13,21 +13,22 @@ public class Display extends Frame{
 
                 for (int i = 0; i < 64; i++) {
                     for (int j = 0; j < 32; j++) {
-                        if (pixels[i][j]){
+                        if (pixels[i][j] == 1){
                             g2.fillRect(i*10, j*10, 10, 10);
+//                            System.err.println("\n"  + i + ", " + j);
                         }
                     }
                 }
             }
         };
 
-        c.setSize(640, 320);
+        c.setSize(64, 32);
         c.setBackground(Color.BLACK);
         c.setForeground(Color.WHITE);
         add(c);
 
         setTitle("CHIP-8");
-        setSize(640, 320);
+        setSize(720, 380);
         setVisible(true);
     }
 
