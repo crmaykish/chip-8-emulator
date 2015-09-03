@@ -9,27 +9,8 @@ import java.util.Stack;
 import java.util.Timer;
 
 public class Emulator {
-    private static final int[] FONT = {
-            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-            0x20, 0x60, 0x20, 0x20, 0x70, // 1
-            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-            0xF0, 0x80, 0xF0, 0x80, 0x80  // F
-    };
-
     private static final String ROM_PATH = "C:/chip8/";
-    private static final String ROM_NAME = "LIFE";
+    private static final String ROM_NAME = "ibm.ch8";
 
     private boolean RUNNING = true;
 
@@ -54,62 +35,52 @@ public class Emulator {
     // Display
     private Display display;
 
-    public Emulator(Display display) {
-        // Instantiate local display object
-        this.display = display;
+    // Timing to control CPU speed and rendering framerate
+    private long lastCycleTime = 0;
+    private long lastDrawTime = 0;
 
-        // Load font sprites into memory
-        for (int i = 0; i < FONT.length; i++) {
-            M[i] = FONT[i];
+    public Emulator() {
+        display = new Display();
+        loadFont();
+        loadRom();
+    }
+
+    // Load font into memory. Font starts at M[0]
+    private void loadFont(){
+        for (int i = 0; i < Font.FONT.length; i++) {
+            M[i] = Font.FONT[i];
         }
+    }
 
-        // Load ROM into memory from local file
+    // Load ROM file into memory. Return true if successful, False if the file can't be found.
+    private boolean loadRom(){
         try {
             byte[] rom = Files.readAllBytes(Paths.get(ROM_PATH + ROM_NAME));
             for (int i = 0; i < rom.length; i++) {
-                M[i + 512] = rom[i];
+                M[i + 512] = rom[i];    // ROM file loads into memory starting at M[512]
             }
+            return true;
         } catch (IOException e) {
             System.err.println("Invalid rom path.");
-            System.exit(0);
+            return false;
         }
-
     }
-
-
-
-    long lastCycleTime = 0;
-    long lastDrawTime = 0;
 
     public void emulate() {
         System.err.println("Starting emulation...");
 
         while (RUNNING) {
-            // Debugging output
-//            System.err.print(hex(op) + " > ");
-//            System.err.print("PC: " + hex(PC) + " | ");
-//            System.err.print("I: " + hex(I) + " | ");
-//            for (int i = 0; i < V.length; i++) {
-//                System.err.print("V" + hex(i) + ": " + hex(V[i]) + " | ");
-//            }
-//            System.err.println("\n");
-
-//             Wait for user input to continue to next step
-//            new Scanner(System.in).nextLine();
-
-
             long time = (System.nanoTime() - lastCycleTime) / 10000;
-            if (time > 500) { // cycle at 1000 ops/second
+            if (time > 50) { // cycle at 10000 ops/second
                 cycle();
                 lastCycleTime = System.nanoTime();
             }
 
             long drawTime = (System.nanoTime() - lastDrawTime) / 10000;
             if (drawTime > 10000){
-                draw();
+                display.redraw();
                 lastDrawTime = System.nanoTime();
             }
-
         }
 
         System.err.println("Stopped emulation.");
@@ -285,6 +256,7 @@ public class Emulator {
                     case 0xA1:  // EXA1: Skips the next instruction if the key stored in VX isn't pressed.
                         // TODO
                         System.err.println("Opcode not implemented: EXA1");
+
                         break;
                 }
                 break;
@@ -314,11 +286,11 @@ public class Emulator {
                         M[I + 1] = (V[(op & 0x0F00 >> 8)] / 100) % 10;
                         M[I + 2] = (V[(op & 0x0F00) >> 8] % 100) % 10;
                     case 0x55:    // FX55: Store V0 to VX in memory starting at I
-                        for (int n = 0; n <= X; n++) { // TODO: < or <=?
+                        for (int n = 0; n <= X; n++) {
                             M[I + n] = V[n];
                         }
                     case 0x65:    // FX65: Fill V0 to VX with memory values starting at address I (I)
-                        for (int n = 0; n <= X; n++) { // TODO: < or <=?
+                        for (int n = 0; n <= X; n++) {
                             V[n] = M[I + n];
                         }
                     default:
@@ -337,13 +309,14 @@ public class Emulator {
         }
     }
 
-    // Draw the screen
-    private void draw() {
-//        if (a == b) {
-            display.redraw();
-//            a = 0;
-//        }
-//        a++;
+    private void debug(){
+        System.err.print(hex(op) + " > ");
+        System.err.print("PC: " + hex(PC) + " | ");
+        System.err.print("I: " + hex(I) + " | ");
+        for (int i = 0; i < V.length; i++) {
+            System.err.print("V" + hex(i) + ": " + hex(V[i]) + " | ");
+        }
+        System.err.println("\n");
     }
 
     // Convert an integer to a Hexadecimal display string
@@ -352,3 +325,4 @@ public class Emulator {
     }
 
 }
+

@@ -3,6 +3,10 @@ package com.cmaykish.chip8.emu;
 import java.awt.*;
 
 public class Display extends Frame{
+    public static final int WIDTH = 64;
+    public static final int HEIGHT = 32;
+    public static final int SCALE = 10;
+
     public int[][] pixels = new int[64][64];
     private Canvas c;
 
@@ -11,18 +15,17 @@ public class Display extends Frame{
             public void paint(Graphics g){
                 Graphics2D g2 = (Graphics2D) g;
 
-                for (int i = 0; i < 64; i++) {
-                    for (int j = 0; j < 32; j++) {
+                for (int i = 0; i < Display.WIDTH; i++) {
+                    for (int j = 0; j < Display.HEIGHT; j++) {
                         if (pixels[i][j] == 1){
-                            g2.fillRect(i*10, j*10, 10, 10);
-//                            System.err.println("\n"  + i + ", " + j);
+                            g2.fillRect(i*Display.SCALE, j*Display.SCALE, Display.SCALE, Display.SCALE);
                         }
                     }
                 }
             }
         };
 
-        c.setSize(64, 32);
+        c.setSize(Display.WIDTH, Display.HEIGHT);
         c.setBackground(Color.BLACK);
         c.setForeground(Color.WHITE);
         add(c);
@@ -34,6 +37,7 @@ public class Display extends Frame{
 
     public void clearScreen(){
         // TODO
+
     }
 
     public void redraw(){
